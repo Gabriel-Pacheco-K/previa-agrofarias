@@ -35,7 +35,7 @@
     5: [[450, 720], [810, 1140]],
     6: [[450, 720]],
   };
-  const NOMES_DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const NO_DIA = ['no domingo', 'na segunda', 'na terça', 'na quarta', 'na quinta', 'na sexta', 'no sábado'];
   const DIAS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const relogio = new Intl.DateTimeFormat('en-US', {
@@ -79,7 +79,7 @@
     for (let k = 1; k <= 7; k++) {
       const d = (dia + k) % 7;
       if (TURNOS[d].length) {
-        const quando = k === 1 ? 'amanhã' : NOMES_DIA[d];
+        const quando = k === 1 ? 'amanhã' : NO_DIA[d];
         return { aberto: false, texto: `Fechado · abre ${quando} às ${hora(TURNOS[d][0][0])}` };
       }
     }
@@ -113,6 +113,7 @@
           tr.querySelector('th').append(' ', tag);
           tr.setAttribute('aria-current', 'date');
         } else if (!ehHoje && marca) {
+          if (marca.previousSibling && marca.previousSibling.nodeType === 3) marca.previousSibling.remove();
           marca.remove();
           tr.removeAttribute('aria-current');
         }
@@ -120,17 +121,24 @@
     }
   };
   atualizarHorario();
-  setInterval(atualizarHorario, 60 * 1000);
+  const agendar = () => setTimeout(() => { atualizarHorario(); agendar(); }, 60000 - (Date.now() % 60000) + 50);
+  agendar();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) atualizarHorario(); });
 
-  // ─── Botão flutuante some enquanto o formulário ou o rodapé estão na tela ─
+  // ─── Botão flutuante some enquanto os botões do topo da página, o formulário ou o rodapé estão na tela ─
+  // O "Pedir" do topo também sai de cena sobre o formulário: abriria a conversa sem a lista montada
   const flutuante = document.querySelector('.whats-float');
   if (flutuante && 'IntersectionObserver' in window) {
+    document.documentElement.classList.add('js-float');
+    const formPedido = document.getElementById('pedido-form');
+    const pedirTopo = document.querySelector('.topbar-actions .btn');
     const visiveis = new Set();
     const obs = new IntersectionObserver((entradas) => {
       entradas.forEach((en) => (en.isIntersecting ? visiveis.add(en.target) : visiveis.delete(en.target)));
       flutuante.classList.toggle('is-hidden', visiveis.size > 0);
+      if (pedirTopo) pedirTopo.classList.toggle('is-off', visiveis.has(formPedido));
     });
-    document.querySelectorAll('#pedido-form, .footer').forEach((el) => obs.observe(el));
+    document.querySelectorAll('#pedido-form, .footer, .hero-actions').forEach((el) => obs.observe(el));
   }
 
   // ─── Monte seu pedido ───────────────────────────────────────
@@ -178,6 +186,7 @@
     const cheio = todos.length >= MAX_ITENS;
     botaoAdd.disabled = cheio;
     aviso.hidden = !cheio;
+    if (!cheio) erro.textContent = '';
   };
 
   const lerPedido = () => {
@@ -245,15 +254,15 @@
 
     if (botao.classList.contains('item-remover')) {
       const todos = itens();
+      // O foco vai para o botão de remover (e não para o campo) para não abrir o teclado no celular
       if (todos.length === 1) {
         li.querySelector('.item-produto').value = '';
         qtd.value = QTD_MIN;
-        li.querySelector('.item-produto').focus();
       } else {
         const i = todos.indexOf(li);
         li.remove();
         const restante = itens();
-        restante[Math.min(i, restante.length - 1)].querySelector('.item-produto').focus();
+        restante[Math.min(i, restante.length - 1)].querySelector('.item-remover').focus();
       }
       renumerar();
       atualizarPrevia();
@@ -275,7 +284,10 @@
     if (proximo) proximo.querySelector('.item-produto').focus();
   });
 
-  form.addEventListener('input', atualizarPrevia);
+  form.addEventListener('input', () => {
+    if (lerPedido().produtos.length) erro.textContent = '';
+    atualizarPrevia();
+  });
   form.addEventListener('change', atualizarPrevia);
 
   // Sugestões preenchem o primeiro item vazio ou criam um novo
@@ -300,7 +312,7 @@
       return;
     }
     erro.textContent = '';
-    window.open(whatsLink(montarMensagem(p)), '_blank', 'noopener');
+    window.open(whatsLink(montarMensagem(p)), '_blank', 'noopener,noreferrer');
   });
 
   renumerar();
